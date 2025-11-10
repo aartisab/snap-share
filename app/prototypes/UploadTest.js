@@ -1,4 +1,4 @@
-
+// Boilerplate starter code generated with the assistance of Gemini 2.5 and heavy prompting, as user did not have prior experience with React nor large-scale projects
 
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, SafeAreaView, FlatList, Image, Button, Dimensions, Platform, StatusBar } from 'react-native';
