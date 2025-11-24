@@ -1,7 +1,6 @@
-import React from 'react';
-import PhotoUpload from '../../prototypes/PhotoUpload';
+import React from "react";
+import App from "../../App";   // assuming App.js or App.tsx sits in same folder
 
-export default function App() {
-    return <PhotoUpload />;
+export default function Index() {
+  return <App />;
 }
-
