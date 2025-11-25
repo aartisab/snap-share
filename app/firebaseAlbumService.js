@@ -9,9 +9,8 @@ import {
 } from "firebase/firestore";
 
 import { supabase } from "./supabaseClient";
-import * as FileSystem from "expo-file-system";
-import { Blob } from "react-native";
-
+import * as FileSystem from "expo-file-system/legacy";
+import { Buffer } from "buffer";
 
 // -------------------------
 // Generate Join Code
@@ -68,41 +67,45 @@ export function subscribeToAlbum(code, callback) {
 // UPLOAD PHOTO → SUPABASE STORAGE
 export async function uploadPhoto(albumCode, uri) {
   try {
-    // 1. Fetch the local file into a Blob (MODERN EXPO WAY)
-    const response = await fetch(uri);
-    const blob = await response.blob();
+    // 1. Read the file as Base64
+    const base64 = await FileSystem.readAsStringAsync(uri, {
+      encoding: "base64",
+    });
 
-    // 2. Create a unique filename
+    // 2. Convert base64 → binary
+    const fileBytes = Buffer.from(base64, "base64");
+
+    // 3. File path in Supabase Storage
     const filename = `${albumCode}/${Date.now()}.jpg`;
 
-    // 3. Upload Blob to Supabase Storage
+    // 4. Upload to Supabase
     const { data, error } = await supabase.storage
       .from("snapshare-photos")
-      .upload(filename, blob, {
+      .upload(filename, fileBytes, {
         contentType: "image/jpeg",
         upsert: false,
       });
 
     if (error) {
-      console.log("Supabase Upload Error:", error);
+      console.error("Supabase upload error:", error);
       throw error;
     }
 
-    // 4. Get public URL
+    // 5. Get public URL
     const { data: publicData } = supabase.storage
       .from("snapshare-photos")
       .getPublicUrl(filename);
 
     const publicUrl = publicData.publicUrl;
 
-    // 5. Save URL in Firestore
+    // 6. Save URL to Firestore album
     await updateDoc(doc(db, "albums", albumCode), {
       photos: arrayUnion(publicUrl),
     });
 
     return publicUrl;
-  } catch (e) {
-    console.error("Upload Error:", e);
-    throw e;
+  } catch (err) {
+    console.error("Upload Error:", err);
+    throw err;
   }
 }
