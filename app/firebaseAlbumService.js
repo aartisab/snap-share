@@ -65,7 +65,7 @@ export function subscribeToAlbum(code, callback) {
 // (Expo Blob official way)
 // -------------------------
 // UPLOAD PHOTO → SUPABASE STORAGE
-export async function uploadPhoto(albumCode, uri) {
+export async function uploadPhoto(albumCode, uri, uploader = "Unknown") {
   try {
     // 1. Read the file as Base64
     const base64 = await FileSystem.readAsStringAsync(uri, {
@@ -99,13 +99,54 @@ export async function uploadPhoto(albumCode, uri) {
     const publicUrl = publicData.publicUrl;
 
     // 6. Save URL to Firestore album
+    const uploaderName =
+      typeof uploader === "string" && uploader.trim().length > 0
+        ? uploader.trim()
+        : "Unknown";
+
+    const photoEntry = {
+      uri: publicUrl,
+      uploader: uploaderName,
+      reactions: [],
+    };
+
     await updateDoc(doc(db, "albums", albumCode), {
-      photos: arrayUnion(publicUrl),
+      photos: arrayUnion(photoEntry),
     });
 
-    return publicUrl;
+    return photoEntry;
   } catch (err) {
     console.error("Upload Error:", err);
     throw err;
   }
+}
+
+export async function addReactionToPhoto(albumCode, photoIndex, reaction) {
+  if (!albumCode || typeof photoIndex !== "number" || photoIndex < 0) return;
+
+  const trimmedReaction =
+    typeof reaction === "string" ? reaction.trim() : "";
+  if (!trimmedReaction) return;
+
+  const ref = doc(db, "albums", albumCode);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+
+  const data = snap.data();
+  const photos = Array.isArray(data.photos) ? [...data.photos] : [];
+
+  if (!photos[photoIndex]) return;
+
+  const photoEntry = photos[photoIndex];
+  const existingReactions = Array.isArray(photoEntry.reactions)
+    ? [...photoEntry.reactions]
+    : [];
+  existingReactions.push(trimmedReaction);
+
+  photos[photoIndex] = {
+    ...photoEntry,
+    reactions: existingReactions,
+  };
+
+  await updateDoc(ref, { photos });
 }
