@@ -12,6 +12,8 @@ import {
   Dimensions,
   Modal,
   TouchableWithoutFeedback,
+  ActivityIndicator,
+  Animated,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
@@ -37,8 +39,11 @@ const H_PADDING = 24;
 const GRID_GAP = 10;
 const NUM_COLUMNS = 3;
 const TILE_SIZE =
-  (SCREEN_WIDTH - H_PADDING * 2 - GRID_GAP * (NUM_COLUMNS - 1)) /
-  NUM_COLUMNS;
+  (SCREEN_WIDTH - H_PADDING * 2 - GRID_GAP * NUM_COLUMNS) / NUM_COLUMNS;
+const GRID_WIDTH = Math.min(
+  SCREEN_WIDTH - H_PADDING * 2,
+  TILE_SIZE * NUM_COLUMNS + GRID_GAP * NUM_COLUMNS
+);
 const DEFAULT_UPLOADER = "Unknown";
 const REACTION_OPTIONS = [
   "😍",
@@ -80,15 +85,7 @@ const normalizePhotos = (album) =>
     .filter(Boolean);
 
 export default function App() {
-  const [activeUser, setActiveUser] = useState("A");
-
-  const [userA, setUserA] = useState({
-    displayName: "",
-    albumName: "",
-    albumCode: "",
-    album: null,
-  });
-  const [userB, setUserB] = useState({
+  const [user, setUser] = useState({
     displayName: "",
     albumName: "",
     albumCode: "",
@@ -102,9 +99,10 @@ export default function App() {
   );
   const [reactionMenuVisible, setReactionMenuVisible] = useState(false);
   const [reactionSending, setReactionSending] = useState(false);
-
-  const user = activeUser === "A" ? userA : userB;
-  const setUser = activeUser === "A" ? setUserA : setUserB;
+  const [uploading, setUploading] = useState(false);
+  const [loadedImages, setLoadedImages] = useState({});
+  const [viewerImageLoading, setViewerImageLoading] = useState(false);
+  const [confettiBursts, setConfettiBursts] = useState([]);
 
   useEffect(() => {
     if (!user.albumCode) return;
@@ -114,24 +112,7 @@ export default function App() {
     });
 
     return unsub;
-  }, [user.albumCode, activeUser]);
-
-  const handleSwitchUser = () => {
-    setActiveUser((prev) => {
-      const next = prev === "A" ? "B" : "A";
-      const nextUser = next === "A" ? userA : userB;
-
-      if (nextUser.album) setScreen(SCREENS.ALBUM);
-      else setScreen(SCREENS.HOME);
-
-      return next;
-    });
-  };
-
-  useEffect(() => {
-    setViewerIndex(null);
-    setReactionMenuVisible(false);
-  }, [activeUser]);
+  }, [user.albumCode]);
 
   useEffect(() => {
     const photos = normalizePhotos(user.album);
@@ -145,8 +126,16 @@ export default function App() {
   }, [user.album?.photos, viewerIndex]);
 
   useEffect(() => {
+    setLoadedImages({});
+  }, [user.album?.code]);
+
+  useEffect(() => {
     if (viewerIndex === null) {
       setReactionMenuVisible(false);
+      setViewerImageLoading(false);
+      setConfettiBursts([]);
+    } else {
+      setViewerImageLoading(true);
     }
   }, [viewerIndex]);
 
@@ -155,6 +144,7 @@ export default function App() {
     if (!photos.length) return;
     const safeIndex = Math.min(Math.max(startIndex, 0), photos.length - 1);
     setViewerIndex(safeIndex);
+    setViewerImageLoading(true);
     setSelectedReaction((prev) =>
       REACTION_OPTIONS.includes(prev) ? prev : REACTION_OPTIONS[0]
     );
@@ -200,6 +190,7 @@ export default function App() {
         viewerIndex,
         trimmedReaction
       );
+      triggerReactionBurst(trimmedReaction);
     } catch (e) {
       console.error(e);
       Alert.alert(
@@ -209,6 +200,54 @@ export default function App() {
     } finally {
       setReactionSending(false);
     }
+  };
+
+  const markImageLoaded = (uri) => {
+    if (!uri) return;
+    setLoadedImages((prev) =>
+      prev[uri] ? prev : { ...prev, [uri]: true }
+    );
+  };
+
+  const triggerReactionBurst = (emoji) => {
+    const count = 35;
+    const newBurst = Array.from({ length: count }).map((_, i) => {
+      const anim = new Animated.Value(0);
+      const angle = Math.random() * Math.PI * 2;
+      const distance = 80 + Math.random() * 140;
+      const translateX = distance * Math.cos(angle);
+      const translateY = distance * Math.sin(angle) * -1;
+      const rotation = Math.floor(Math.random() * 360);
+      const scaleTo = 0.8 + Math.random() * 0.7;
+      const delay = Math.random() * 150;
+      const startX = (Math.random() - 0.5) * 200;
+      const startY = (Math.random() - 0.5) * 200;
+      return {
+        id: `${Date.now()}-${i}`,
+        emoji,
+        anim,
+        translateX,
+        translateY,
+        rotation,
+        scaleTo,
+        delay,
+        startX,
+        startY,
+      };
+    });
+
+    setConfettiBursts((prev) => [...prev, ...newBurst]);
+
+    newBurst.forEach((burst) => {
+      Animated.timing(burst.anim, {
+        toValue: 1,
+        duration: 1200,
+        delay: burst.delay,
+        useNativeDriver: true,
+      }).start(() => {
+        setConfettiBursts((prev) => prev.filter((b) => b.id !== burst.id));
+      });
+    });
   };
 
   const handleCreateAlbum = async () => {
@@ -276,13 +315,30 @@ export default function App() {
     }
   };
 
-  const handleUpload = async () => {
-    if (!user.album) return;
-
+  const getUploaderName = () => {
     const trimmedDisplayName =
       typeof user.displayName === "string" ? user.displayName.trim() : "";
-    const uploaderName = trimmedDisplayName || `User ${activeUser}`;
+    return trimmedDisplayName || "Guest";
+  };
 
+  const uploadAssets = async (assets) => {
+    if (!user.album || !assets || !assets.length) return;
+    const uploaderName = getUploaderName();
+    try {
+      setUploading(true);
+      for (const asset of assets) {
+        await uploadPhoto(user.album.code, asset.uri, uploaderName);
+      }
+    } catch (e) {
+      console.error(e);
+      Alert.alert("Error", "Failed to upload some photos.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const uploadFromLibrary = async () => {
+    if (!user.album || uploading) return;
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
       Alert.alert("Permission needed", "Media library permission is required.");
@@ -297,15 +353,35 @@ export default function App() {
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      try {
-        for (const asset of result.assets) {
-          await uploadPhoto(user.album.code, asset.uri, uploaderName);
-        }
-      } catch (e) {
-        console.error(e);
-        Alert.alert("Error", "Failed to upload some photos.");
-      }
+      await uploadAssets(result.assets);
     }
+  };
+
+  const captureWithCamera = async () => {
+    if (!user.album || uploading) return;
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permission needed", "Camera access is required.");
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 1,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      await uploadAssets(result.assets);
+    }
+  };
+
+  const handleUpload = () => {
+    if (!user.album || uploading) return;
+    Alert.alert("Upload Photo", "Choose a source", [
+      { text: "Camera", onPress: () => captureWithCamera() },
+      { text: "Photo Library", onPress: () => uploadFromLibrary() },
+      { text: "Cancel", style: "cancel" },
+    ]);
   };
 
   const handleDownload = async (uri) => {
@@ -355,7 +431,9 @@ export default function App() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.centered}>
           <Text style={styles.logo}>SnapShare</Text>
-          <Text style={styles.userLabel}>User {activeUser}</Text>
+          <Text style={styles.userLabel}>
+            Create and share photo albums instantly across devices.
+          </Text>
 
           <View style={{ marginTop: 40 }}>
             <TouchableOpacity
@@ -373,15 +451,6 @@ export default function App() {
             </TouchableOpacity>
           </View>
         </View>
-
-        <TouchableOpacity
-          style={styles.switchUserButton}
-          onPress={handleSwitchUser}
-        >
-          <Text style={styles.switchUserText}>
-            Switch to User {activeUser === "A" ? "B" : "A"}
-          </Text>
-        </TouchableOpacity>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -439,15 +508,6 @@ export default function App() {
             </TouchableOpacity>
           </View>
         </View>
-
-        <TouchableOpacity
-          style={styles.switchUserButton}
-          onPress={handleSwitchUser}
-        >
-          <Text style={styles.switchUserText}>
-            Switch to User {activeUser === "A" ? "B" : "A"}
-          </Text>
-        </TouchableOpacity>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -506,15 +566,6 @@ export default function App() {
             </TouchableOpacity>
           </View>
         </View>
-
-        <TouchableOpacity
-          style={styles.switchUserButton}
-          onPress={handleSwitchUser}
-        >
-          <Text style={styles.switchUserText}>
-            Switch to User {activeUser === "A" ? "B" : "A"}
-          </Text>
-        </TouchableOpacity>
       </SafeAreaView>
     </LinearGradient>
   );
@@ -531,6 +582,10 @@ export default function App() {
     const canGoPrev = viewerIndex !== null && viewerIndex > 0;
     const canGoNext =
       viewerIndex !== null && viewerIndex < photos.length - 1;
+    const viewerName =
+      typeof user.displayName === "string" && user.displayName.trim().length
+        ? user.displayName.trim()
+        : "Guest";
 
     return (
       <LinearGradient
@@ -584,24 +639,57 @@ export default function App() {
                   if (item === "__add_tile__") {
                     return (
                       <TouchableOpacity
-                        style={styles.addTile}
+                        style={[
+                          styles.addTile,
+                          uploading && styles.addTileDisabled,
+                        ]}
                         onPress={handleUpload}
+                        disabled={uploading}
                       >
-                        <Text style={styles.addPlus}>+</Text>
-                        <Text style={styles.addLabel}>Upload More</Text>
+                        {uploading ? (
+                          <>
+                            <ActivityIndicator color="#3565F0" />
+                            <Text style={styles.addLabel}>Uploading...</Text>
+                          </>
+                        ) : (
+                          <>
+                            <Text style={styles.addPlus}>+</Text>
+                            <Text style={styles.addLabel}>Upload More</Text>
+                          </>
+                        )}
                       </TouchableOpacity>
                     );
                   }
 
+                  const isLoaded = !!loadedImages[item.uri];
                   return (
-                    <TouchableOpacity onPress={() => openPhotoViewer(index)}>
-                      <Image source={{ uri: item.uri }} style={styles.gridImage} />
+                    <TouchableOpacity
+                      style={styles.gridImageWrapper}
+                      onPress={() => openPhotoViewer(index)}
+                      activeOpacity={0.85}
+                    >
+                      {!isLoaded && (
+                        <View style={styles.imagePlaceholder}>
+                          <ActivityIndicator color="#3565F0" />
+                        </View>
+                      )}
+                      <Image
+                        source={{ uri: item.uri }}
+                        style={styles.gridImage}
+                        onLoad={() => markImageLoaded(item.uri)}
+                      />
                     </TouchableOpacity>
                   );
                 }}
               />
             )}
           </View>
+          {uploading && (
+            <View style={styles.uploadingBanner}>
+              <ActivityIndicator color="#3565F0" size="small" />
+              <Text style={styles.uploadingText}>Uploading photos...</Text>
+            </View>
+          )}
 
           <View style={styles.albumBottom}>
             {hasPhotos ? (
@@ -622,30 +710,22 @@ export default function App() {
               </View>
             ) : (
               <TouchableOpacity
-                style={styles.primaryButtonLarge}
+                style={[
+                  styles.primaryButtonLarge,
+                  uploading && styles.primaryButtonLargeDisabled,
+                ]}
                 onPress={handleUpload}
+                disabled={uploading}
               >
                 <Text style={styles.primaryButtonText}>
-                  Upload Photo/Video
+                  {uploading ? "Uploading..." : "Upload Photo/Video"}
                 </Text>
               </TouchableOpacity>
             )}
 
             <Text style={styles.viewerText}>
-              Viewing album as{" "}
-              <Text style={{ fontWeight: "700" }}>
-                {user.displayName || `User ${activeUser}`}
-              </Text>
+              Viewing album as <Text style={{ fontWeight: "700" }}>{viewerName}</Text>
             </Text>
-
-            <TouchableOpacity
-              style={styles.switchUserButtonAlbum}
-              onPress={handleSwitchUser}
-            >
-              <Text style={styles.switchUserTextAlbum}>
-                Switch to User {activeUser === "A" ? "B" : "A"}
-              </Text>
-            </TouchableOpacity>
           </View>
         </SafeAreaView>
         {viewerIndex !== null && currentPhotoUri && (
@@ -701,11 +781,61 @@ export default function App() {
                   </TouchableOpacity>
                 </View>
                 <View style={styles.viewerImageWrapper}>
+                  {viewerImageLoading && (
+                    <View style={styles.viewerImageLoader}>
+                      <ActivityIndicator color="#FFFFFF" />
+                    </View>
+                  )}
                   <Image
                     source={{ uri: currentPhotoUri }}
                     style={styles.viewerImage}
                     resizeMode="cover"
+                    onLoadEnd={() => setViewerImageLoading(false)}
                   />
+                  <View style={styles.confettiLayer} pointerEvents="none">
+                    {confettiBursts.map((burst) => (
+                      <Animated.Text
+                        key={burst.id}
+                        style={[
+                          styles.confettiEmoji,
+                          {
+                            opacity: burst.anim.interpolate({
+                              inputRange: [0, 0.8, 1],
+                              outputRange: [1, 1, 0],
+                            }),
+                            transform: [
+                              {
+                              translateX: burst.anim.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [burst.startX, burst.startX + burst.translateX],
+                              }),
+                            },
+                            {
+                              translateY: burst.anim.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [burst.startY, burst.startY + burst.translateY],
+                              }),
+                            },
+                              {
+                              scale: burst.anim.interpolate({
+                                inputRange: [0, 1],
+                                outputRange: [0.7, burst.scaleTo],
+                              }),
+                            },
+                              {
+                                rotate: burst.anim.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: ["0deg", `${burst.rotation}deg`],
+                                }),
+                              },
+                            ],
+                          },
+                        ]}
+                      >
+                        {burst.emoji}
+                      </Animated.Text>
+                    ))}
+                  </View>
                   {currentReactions.length > 0 && (
                     <View style={styles.reactionStack}>
                       {currentReactions.slice(-6).map((reaction, idx) => (
@@ -786,9 +916,13 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   userLabel: {
-    marginTop: 8,
+    marginTop: 12,
     fontSize: 18,
     color: "#4E5A7A",
+    textAlign: "center",
+    maxWidth: 320,
+    lineHeight: 24,
+    alignSelf: "center",
   },
 
   primaryButtonLarge: {
@@ -810,6 +944,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
   },
+  primaryButtonLargeDisabled: {
+    opacity: 0.6,
+  },
   secondaryButtonLarge: {
     borderWidth: 2,
     borderColor: "#3565F0",
@@ -824,16 +961,6 @@ const styles = StyleSheet.create({
     color: "#3565F0",
     fontSize: 18,
     fontWeight: "700",
-  },
-
-  switchUserButton: {
-    alignSelf: "center",
-    marginBottom: 24,
-  },
-  switchUserText: {
-    color: "#3565F0",
-    fontWeight: "600",
-    fontSize: 16,
   },
 
   backButton: {
@@ -946,7 +1073,7 @@ const styles = StyleSheet.create({
   },
   
   gridList: {
-    width: "100%",
+    width: GRID_WIDTH,
     alignSelf: "center",
   },
 
@@ -955,12 +1082,45 @@ const styles = StyleSheet.create({
     paddingTop: 4,
     paddingHorizontal: GRID_GAP / 2,
   },
-  gridImage: {
+  gridImageWrapper: {
     width: TILE_SIZE,
     height: TILE_SIZE,
-    borderRadius: 12,
     marginHorizontal: GRID_GAP / 2,
     marginBottom: GRID_GAP,
+    borderRadius: 14,
+    overflow: "hidden",
+    borderWidth: 2,
+    borderColor: "#3565F0",
+    backgroundColor: "rgba(53,101,240,0.08)",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  imagePlaceholder: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(53,101,240,0.08)",
+  },
+  gridImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 10,
+  },
+  uploadingBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+  },
+  uploadingText: {
+    marginLeft: 8,
+    color: "#3565F0",
+    fontWeight: "600",
   },
   addTile: {
     width: TILE_SIZE,
@@ -987,6 +1147,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "center",
   },
+  addTileDisabled: {
+    opacity: 0.6,
+  },
 
   viewerModalContainer: {
     flex: 1,
@@ -1006,6 +1169,8 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#3565F0",
     alignItems: "center",
+    position: "relative",
+    overflow: "hidden",
   },
   viewerTitle: {
     fontSize: 28,
@@ -1104,6 +1269,12 @@ const styles = StyleSheet.create({
     width: "100%",
     aspectRatio: 3 / 4,
   },
+  viewerImageLoader: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.25)",
+  },
   reactionStack: {
     position: "absolute",
     left: 8,
@@ -1111,6 +1282,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     maxWidth: "70%",
+    zIndex: 3,
   },
   reactionEmoji: {
     fontSize: 24,
@@ -1144,6 +1316,20 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 26,
     fontWeight: "800",
+  },
+  confettiLayer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    pointerEvents: "none",
+    zIndex: 2,
+  },
+  confettiEmoji: {
+    fontSize: 34,
   },
 
   albumBottom: {
@@ -1187,13 +1373,5 @@ const styles = StyleSheet.create({
     color: "#4E5A7A",
     marginBottom: 4,
     textAlign: "center",
-  },
-  switchUserButtonAlbum: {
-    marginTop: 4,
-  },
-  switchUserTextAlbum: {
-    color: "#3565F0",
-    fontWeight: "600",
-    fontSize: 15,
   },
 });
