@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Animated, Easing } from "react-native";
+import CameraLogo from "./assets/images/camera.png";
 import {
   View,
   Text,
@@ -459,11 +460,8 @@ export default function App() {
 
         {/* Floating logo */}
         <Animated.View style={{ transform: [{ translateY: floatAnim }] }}>
-          <View style={styles.logoCircle}>
-            <Text style={styles.logoEmoji}>📸</Text>
-          </View>
+          <Image source={CameraLogo} style={styles.logoImage} />
         </Animated.View>
-
         <Text style={styles.logoTitle}>SnapShare</Text>
         <Text style={styles.logoSubtitle}>
           Create and share photo albums instantly across devices.
@@ -651,7 +649,7 @@ export default function App() {
           <View style={styles.albumMain}>
             {!hasPhotos ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyIcon}>📷</Text>
+                <Image source={CameraLogo} style={styles.emptyImage} />
                 <Text style={styles.emptyTextLine1}>
                   No photos/videos yet...
                 </Text>
@@ -1454,6 +1452,24 @@ logoSubtitle: {
   textAlign: "center",
   maxWidth: 320,
   lineHeight: 24,
+},
+
+logoImage: {
+  width: 150,
+  height: 150,
+  resizeMode: "contain",
+  shadowColor: "#000",
+  shadowOpacity: 0.15,
+  shadowRadius: 12,
+  shadowOffset: { width: 0, height: 4 },
+},
+
+emptyImage: {
+  width: 140,
+  height: 140,
+  resizeMode: "contain",
+  marginBottom: 16,
+  opacity: 0.9,
 },
 
   viewerText: {
