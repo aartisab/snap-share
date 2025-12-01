@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Animated, Easing } from "react-native";
 import {
   View,
   Text,
@@ -13,7 +14,6 @@ import {
   Modal,
   TouchableWithoutFeedback,
   ActivityIndicator,
-  Animated,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
@@ -103,6 +103,28 @@ export default function App() {
   const [loadedImages, setLoadedImages] = useState({});
   const [viewerImageLoading, setViewerImageLoading] = useState(false);
   const [confettiBursts, setConfettiBursts] = useState([]);
+
+  const floatAnim = React.useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, {
+          toValue: -10,
+          duration: 1800,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(floatAnim, {
+          toValue: 0,
+          duration: 1800,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, []);
+
 
   useEffect(() => {
     if (!user.albumCode) return;
@@ -422,38 +444,51 @@ export default function App() {
   };
 
   const renderHome = () => (
-    <LinearGradient
-      colors={["#FFE4C4", "#C5D4FF"]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.gradient}
-    >
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.centered}>
-          <Text style={styles.logo}>SnapShare</Text>
-          <Text style={styles.userLabel}>
-            Create and share photo albums instantly across devices.
-          </Text>
+  <LinearGradient
+    colors={["#FFE4C4", "#C5D4FF"]}
+    start={{ x: 0, y: 0 }}
+    end={{ x: 1, y: 1 }}
+    style={styles.gradient}
+  >
+    {/* blurred background blobs */}
+    <View style={styles.blob1} />
+    <View style={styles.blob2} />
 
-          <View style={{ marginTop: 40 }}>
-            <TouchableOpacity
-              style={styles.primaryButtonLarge}
-              onPress={() => setScreen(SCREENS.CREATE)}
-            >
-              <Text style={styles.primaryButtonText}>Create New Album</Text>
-            </TouchableOpacity>
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.centered}>
 
-            <TouchableOpacity
-              style={styles.secondaryButtonLarge}
-              onPress={() => setScreen(SCREENS.JOIN)}
-            >
-              <Text style={styles.secondaryButtonText}>Join with Code</Text>
-            </TouchableOpacity>
+        {/* Floating logo */}
+        <Animated.View style={{ transform: [{ translateY: floatAnim }] }}>
+          <View style={styles.logoCircle}>
+            <Text style={styles.logoEmoji}>📸</Text>
           </View>
+        </Animated.View>
+
+        <Text style={styles.logoTitle}>SnapShare</Text>
+        <Text style={styles.logoSubtitle}>
+          Create and share photo albums instantly across devices.
+        </Text>
+
+        <View style={{ marginTop: 40 }}>
+          <TouchableOpacity
+            style={styles.primaryButtonLarge}
+            onPress={() => setScreen(SCREENS.CREATE)}
+          >
+            <Text style={styles.primaryButtonText}>Create New Album</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.secondaryButtonLarge}
+            onPress={() => setScreen(SCREENS.JOIN)}
+          >
+            <Text style={styles.secondaryButtonText}>Join with Code</Text>
+          </TouchableOpacity>
         </View>
-      </SafeAreaView>
-    </LinearGradient>
-  );
+      </View>
+    </SafeAreaView>
+  </LinearGradient>
+);
+
 
   const renderCreate = () => (
     <LinearGradient
@@ -1367,6 +1402,59 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
   },
+
+  blob1: {
+  position: "absolute",
+  top: -120,
+  right: -80,
+  width: 260,
+  height: 260,
+  borderRadius: 200,
+  backgroundColor: "rgba(255,150,120,0.35)",
+  opacity: 0.6,
+},
+blob2: {
+  position: "absolute",
+  bottom: -130,
+  left: -90,
+  width: 300,
+  height: 300,
+  borderRadius: 200,
+  backgroundColor: "rgba(120,150,255,0.35)",
+  opacity: 0.55,
+},
+
+/* Logo styles */
+logoCircle: {
+  width: 120,
+  height: 120,
+  borderRadius: 60,
+  backgroundColor: "rgba(255,255,255,0.85)",
+  justifyContent: "center",
+  alignItems: "center",
+  shadowColor: "#000",
+  shadowOpacity: 0.15,
+  shadowRadius: 12,
+  shadowOffset: { width: 0, height: 4 },
+},
+logoEmoji: {
+  fontSize: 60,
+},
+logoTitle: {
+  marginTop: 20,
+  fontSize: 36,
+  fontWeight: "800",
+  color: "#3565F0",
+  textAlign: "center",
+},
+logoSubtitle: {
+  marginTop: 12,
+  fontSize: 18,
+  color: "#4E5A7A",
+  textAlign: "center",
+  maxWidth: 320,
+  lineHeight: 24,
+},
 
   viewerText: {
     fontSize: 15,
