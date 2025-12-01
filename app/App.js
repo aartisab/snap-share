@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Animated, Easing } from "react-native";
 import CameraLogo from "./assets/images/camera.png";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 import {
   View,
   Text,
@@ -33,6 +35,7 @@ const SCREENS = {
   CREATE: "CREATE",
   JOIN: "JOIN",
   ALBUM: "ALBUM",
+  MY_ALBUMS: "MY_ALBUMS",
 };
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -84,6 +87,64 @@ const normalizePhotos = (album) =>
       return { uri, uploader, reactions };
     })
     .filter(Boolean);
+
+
+  function MyAlbumsScreen({ setScreen, loadRecentAlbums, setUser }) {
+  const [albums, setAlbums] = useState([]);
+
+  useEffect(() => {
+    loadRecentAlbums().then(setAlbums);
+  }, []);
+
+  return (
+    <LinearGradient
+      colors={["#FFE4C4", "#C5D4FF"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.gradient}
+    >
+      <SafeAreaView style={styles.safeArea}>
+        <TouchableOpacity
+          style={{ marginBottom: 20 }}
+          onPress={() => setScreen("HOME")}
+        >
+          <Text style={styles.backText}>‹ Home</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.title}>My Albums</Text>
+
+        {albums.length === 0 ? (
+          <Text style={{ marginTop: 40, fontSize: 16, color: "#4E5A7A" }}>
+            You haven’t joined or created any albums yet.
+          </Text>
+        ) : (
+          <FlatList
+            data={albums}
+            keyExtractor={(a) => a.code}
+            contentContainerStyle={{ marginTop: 20 }}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.albumItem}
+                onPress={() => {
+                  setUser((prev) => ({
+                    ...prev,
+                    albumCode: item.code,
+                    albumName: item.name,
+                  }));
+                  setScreen("ALBUM");
+                }}
+              >
+                <Text style={styles.albumItemTitle}>{item.name}</Text>
+                <Text style={styles.albumItemCode}>Code: {item.code}</Text>
+              </TouchableOpacity>
+            )}
+          />
+        )}
+      </SafeAreaView>
+    </LinearGradient>
+  );
+}
+
 
 export default function App() {
   const [user, setUser] = useState({
@@ -199,6 +260,21 @@ export default function App() {
     setReactionMenuVisible(false);
   };
 
+  const saveAlbumToRecent = async (album) => {
+  const existing = JSON.parse(await AsyncStorage.getItem("recentAlbums")) || [];
+
+  // Avoid duplicates
+  const filtered = existing.filter((a) => a.code !== album.code);
+
+  const updated = [album, ...filtered];
+  await AsyncStorage.setItem("recentAlbums", JSON.stringify(updated));
+  };
+
+  const loadRecentAlbums = async () => {
+    return JSON.parse(await AsyncStorage.getItem("recentAlbums")) || [];
+  };
+
+
   const handleSendReaction = async () => {
     if (viewerIndex === null || !user.album || reactionSending) return;
 
@@ -296,6 +372,7 @@ export default function App() {
         album: { ...album, photos: [] },
       }));
 
+      saveAlbumToRecent({ code: album.code, name: album.name });
       setScreen(SCREENS.ALBUM);
     } catch (e) {
       console.error(e);
@@ -331,6 +408,7 @@ export default function App() {
         album,
       }));
 
+      saveAlbumToRecent({ code: trimmedCode, name: album.name });
       setScreen(SCREENS.ALBUM);
     } catch (e) {
       console.error(e);
@@ -481,12 +559,17 @@ export default function App() {
           >
             <Text style={styles.secondaryButtonText}>Join with Code</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+          style={[styles.secondaryButtonLarge, { marginTop: 16 }]}
+          onPress={() => setScreen(SCREENS.MY_ALBUMS)}
+        >
+          <Text style={styles.secondaryButtonText}>My Albums</Text>
+        </TouchableOpacity>
         </View>
       </View>
     </SafeAreaView>
   </LinearGradient>
 );
-
 
   const renderCreate = () => (
     <LinearGradient
@@ -923,6 +1006,14 @@ export default function App() {
 
   if (screen === SCREENS.CREATE) return renderCreate();
   if (screen === SCREENS.JOIN) return renderJoin();
+  if (screen === SCREENS.MY_ALBUMS)
+    return (
+      <MyAlbumsScreen
+        setScreen={setScreen}
+        loadRecentAlbums={loadRecentAlbums}
+        setUser={setUser}
+      />
+    );
   if (screen === SCREENS.ALBUM && user.album) return renderAlbum();
   return renderHome();
 }
@@ -1470,6 +1561,25 @@ emptyImage: {
   resizeMode: "contain",
   marginBottom: 16,
   opacity: 0.9,
+},
+
+albumItem: {
+  backgroundColor: "rgba(255,255,255,0.85)",
+  padding: 18,
+  borderRadius: 14,
+  marginVertical: 10,
+  borderWidth: 2,
+  borderColor: "#3565F0",
+},
+albumItemTitle: {
+  fontSize: 18,
+  fontWeight: "700",
+  color: "#3565F0",
+},
+albumItemCode: {
+  marginTop: 6,
+  fontSize: 14,
+  color: "#4E5A7A",
 },
 
   viewerText: {
