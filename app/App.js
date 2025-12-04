@@ -263,7 +263,6 @@ export default function App() {
   const saveAlbumToRecent = async (album) => {
   const existing = JSON.parse(await AsyncStorage.getItem("recentAlbums")) || [];
 
-  // Avoid duplicates
   const filtered = existing.filter((a) => a.code !== album.code);
 
   const updated = [album, ...filtered];
@@ -1156,19 +1155,19 @@ const styles = StyleSheet.create({
   albumHeader: {
     marginTop: 8,
     marginBottom: 24,
-    alignItems: "center",          // <— center block
+    alignItems: "center",
   },
   albumTitleBig: {
     fontSize: 30,
     fontWeight: "800",
     color: "#3565F0",
-    textAlign: "center",           // <— center text
+    textAlign: "center",
   },
   albumCodeText: {
     marginTop: 4,
     fontSize: 16,
     color: "#7F8BA8",
-    textAlign: "center",           // <— center text
+    textAlign: "center",
   },
 
   albumMain: {
