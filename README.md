@@ -56,3 +56,7 @@ It features a unique backend architecture, with **Firebase Firestore** for data 
     *   Scan the QR code with the **Expo Go** app.
     *   Press `a` to open in Android Emulator or `i` for iOS Simulator.
 
+### Sources
+ChatGPT was used to help with some of the code since none of us had used React before.
+Logo:  https://www.vecteezy.com/vector-art/2831547-cartoon-camera-vector-sign-flat-style
+
