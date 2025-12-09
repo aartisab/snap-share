@@ -27,7 +27,7 @@ It features a unique backend architecture, with **Firebase Firestore** for data 
 
 ### Prerequisites
 
-*   [Node.js](https://nodejs.org/) (
+*   [Node.js](https://nodejs.org/)
 *   [Expo Go](https://expo.dev/go) app 
 
 ### Installation
