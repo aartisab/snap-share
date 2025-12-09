@@ -4,7 +4,7 @@ SnapShare is a cross-device photo sharing album built using **React Native** and
 
 It features a unique backend architecture, with **Firebase Firestore** for data synchronization and **Supabase** for image storage.
 
-## ✨ Features
+## Features
 
 *   **Instant Album Creation:** Create a new album and get a join code.
 *   **Join via Code:** Join your shared albums instantly.
@@ -23,7 +23,7 @@ It features a unique backend architecture, with **Firebase Firestore** for data 
 *   **Local Persistence:**
 *   **UI/Animations:** 
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
